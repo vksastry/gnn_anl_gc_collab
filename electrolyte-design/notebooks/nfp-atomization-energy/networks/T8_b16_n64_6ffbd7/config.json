@@ -1,0 +1,1 @@
+{"atom_features": 32, "num_messages": 8, "output_layers": [512, 256, 128], "batch_size": 16, "num_epochs": 64, "padded_size": 29}
