@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 import nfp
 import sys
-sys.path.append('/home/vsastry/graph_ganesh_new/electrolyte-design')
+sys.path.append('../../../electrolyte-design')
 print(sys.path)
 from moldesign.utils.callbacks import EpochTimeLogger, LRLogger
 from moldesign.score.nfp import make_data_loader
