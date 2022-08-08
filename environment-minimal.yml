@@ -10,16 +10,6 @@ dependencies:
   - flake8
   - pip
 
-  # Dependencies from the molecular design app
-  - matplotlib==3.3.3
-  - scikit-learn==1.1.1
-  - rdkit==2019.09.3
-  - networkx==2.8.5
-  - psutil
-  - tqdm
-
-  # Pip packages for all of them
   - pip:
-      - -e .  # Installs the 
-      - tensorflow==2.8.*
-      - nfp==0.3.12
+      - -r requirements.txt
+      - -e .  # Installs our utilities 
