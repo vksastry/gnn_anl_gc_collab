@@ -1,13 +1,9 @@
 """Converting between different descriptions of molecules"""
-from typing import List
 import logging
 
 import numpy as np
 import networkx as nx
 from rdkit import Chem
-
-from moldesign.utils.chemistry import parse_from_molecule_string
-
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +23,6 @@ def parse_from_molecule_string(mol_string: str) -> Chem.Mol:
     if mol is None:
         raise ValueError(f'Failed to parse: {mol_string}')
     return mol
-
 
 
 def convert_rdkit_to_nx(mol: 'Chem.Mol') -> nx.Graph:
@@ -179,6 +174,7 @@ def convert_string_to_dict(smiles: str) -> dict:
     """
     graph = convert_string_to_nx(smiles)
     return convert_nx_to_dict(graph)
+
 
 def convert_rdkit_to_dict(mol: 'Chem.Mol') -> dict:
     """Convert RDKit molecule into an MPNN-ready dict
