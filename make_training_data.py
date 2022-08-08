@@ -7,7 +7,7 @@ import pandas as pd
 import json
 
 data = pd.read_json('https://github.com/globus-labs/g4mp2-atomization-energy/raw/master/data/output/g4mp2_data.json.gz',
-                   lines=True)
+                    lines=True)
 print(f'Downloaded {len(data)} training entries')
 
 test_set = data.query('in_holdout')
@@ -21,5 +21,6 @@ out_dir.mkdir(exist_ok=True)
 
 for name, dataset in zip(['train', 'valid', 'test'], [train_set, val_set, test_set]):
     dataset = dataset.sample(frac=1.)  # Shuffle contents
-    dataset.rename(columns={'smiles_0': 'smiles', 'g4mp2_atom': 'output'})[['smiles', 'output']].to_csv(out_dir / f'{name}.csv', index=False)
-
+    dataset.rename(columns={'smiles_0': 'smiles', 'g4mp2_atom': 'output'})[['smiles', 'output', 'n_atom']].to_csv(
+        out_dir / f'{name}.csv', index=False
+    )
