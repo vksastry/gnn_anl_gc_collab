@@ -12,6 +12,7 @@ dependencies:
 
   # Dependencies from the molecular design app
   - matplotlib==3.3.3
+  - scikit-learn==1.1.1
   - rdkit==2019.09.3
   - psutil
   - tqdm
