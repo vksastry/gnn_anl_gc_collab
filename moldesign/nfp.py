@@ -29,6 +29,7 @@ def _to_nfp_dict(x: dict) -> dict:
 def make_data_loader(mols: List[str],
                      values: Optional[List[Any]] = None,
                      batch_size: int = 32,
+                     repeat: bool = False,
                      shuffle_buffer: Optional[int] = None,
                      value_spec: tf.TensorSpec = tf.TensorSpec((), dtype=tf.float32),
                      max_size: Optional[int] = None,
@@ -40,6 +41,7 @@ def make_data_loader(mols: List[str],
         values: List of output values, if included in the output
         value_spec: Tensorflow specification for the output
         batch_size: Number of molecules per batch
+        repeat: Whether to create an infinitely-repeating iterator
         shuffle_buffer: Size of a shuffle buffer. Use ``None`` to leave data unshuffled
         max_size: Maximum number of atoms per molecule
         drop_last_batch: Whether to keep the last batch in the dataset. Set to ``True`` if, for example, you need every batch to be the same size
@@ -66,6 +68,10 @@ def make_data_loader(mols: List[str],
         record_sig = (record_sig, value_spec)
 
     loader = tf.data.Dataset.from_generator(generator=generator, output_signature=record_sig).cache()  # TODO (wardlt): Make caching optional?
+
+    # Repeat the molecule list before shuffling
+    if repeat:
+        loader = loader.repeat()
 
     # Shuffle, if desired
     if shuffle_buffer is not None:

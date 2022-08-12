@@ -127,8 +127,9 @@ if __name__ == "__main__":
     # Making the data loaders
     data_dir = Path('data') / args.dataset
     train_data = pd.read_csv(data_dir / 'train.csv')
-    train_loader = make_data_loader(train_data['smiles'], train_data['output'], shuffle_buffer=32768,
+    train_loader = make_data_loader(train_data['smiles'], train_data['output'], shuffle_buffer=32768, repeat=True,
                                     batch_size=args.batch_size, max_size=args.padded_size, drop_last_batch=True)
+    steps_per_epoch = len(train_data) // args.batch_size
 
     test_data = pd.read_csv(data_dir / 'test.csv')
     test_loader = make_data_loader(test_data['smiles'], test_data['output'], batch_size=args.batch_size,
@@ -177,6 +178,7 @@ if __name__ == "__main__":
                 cb.CSVLogger(test_dir / 'train_log.csv'),
                 cb.TerminateOnNaN()
             ],
+            steps_per_epoch=steps_per_epoch
         )
         run_time = perf_counter() - start_time
 
