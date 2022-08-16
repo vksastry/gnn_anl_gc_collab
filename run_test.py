@@ -87,7 +87,7 @@ if __name__ == "__main__":
     arg_parser.add_argument('--batch-size', help='Number of molecules per batch', type=int, default=16)
     arg_parser.add_argument('--num-epochs', help='Number of epochs to run', type=int, default=64)
     arg_parser.add_argument('--padded-size', help='Maximum number of atoms per molecule', type=int, default=None)
-    arg_parser.add_argument('--dataset', choices=['qm9'], help='Which dataset to use for training', default='qm9')
+    arg_parser.add_argument('--dataset', choices=['qm9', 'redox'], help='Which dataset to use for training', default='qm9')
     arg_parser.add_argument('--system', choices=['gpu', 'ipu'], help='Which system to use for training', default='gpu')
     arg_parser.add_argument('--lr-start', default=1e-3, help='Learning rate at start of training', type=float)
 
