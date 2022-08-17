@@ -76,10 +76,10 @@ def build_fn(atom_features: int = 64,
     # Construct the tf.keras model
     return tf.keras.Model([atom, bond, connectivity], [output])
 
-
-if __name__ == "__main__":
+def parse_args():
     # Define the command line arguments
     arg_parser = ArgumentParser()
+    arg_parser.add_argument('--conf', action='append')
     arg_parser.add_argument('--atom-features', help='Number of atomic features', type=int, default=32)
     arg_parser.add_argument('--num-messages', help='Number of message-passing layers', type=int, default=8)
     arg_parser.add_argument('--output-layers', help='Number of hidden units of the output layers', type=int,
@@ -93,24 +93,26 @@ if __name__ == "__main__":
 
     # Parse the arguments
     args = arg_parser.parse_args()
-    run_params = args.__dict__
-    params_hash = hashlib.sha256(json.dumps(run_params).encode()).hexdigest()[:6]
 
-    # Determine the output directory
-    test_dir = Path('networks') / f'{args.dataset}-{args.system}_b{args.batch_size}_n{args.num_epochs}_{params_hash}'
-    test_dir.mkdir(parents=True)
-    with open(test_dir / 'config.json', 'w') as fp:
-        json.dump(run_params, fp)
+    if args.conf is not None:
+        for conf_fname in args.conf:
+            with open(conf_fname,'r') as f:
+                dict = json.loads(f.read())
+                arg_parser.set_defaults(**dict)
+        # Reload command line arguments
+        args = arg_parser.parse_args()
 
-    # Configuration he
-    if args.system == 'ipu':
+    return args
+
+def device_strategy(device='gpu'):
+    if device == 'ipu':
         #  Configure the IPU system and define the strategy
         cfg = ipu.config.IPUConfig()
         cfg.auto_select_ipus = 1
         cfg.configure_ipu_system()
 
         strategy = ipu.ipu_strategy.IPUStrategy(enable_dataset_iterators=True)
-    elif args.system == 'gpu':
+    elif device == 'gpu':
         # Distribute over all available GPUs
         strategy = tf.distribute.MirroredStrategy()
 
@@ -123,6 +125,24 @@ if __name__ == "__main__":
             json.dump(device_details, fp)
     else:
         raise ValueError(f'System {args.system} not supported yet')
+
+    return strategy
+
+if __name__ == "__main__":
+
+    args = parse_args()
+
+    run_params = args.__dict__
+    params_hash = hashlib.sha256(json.dumps(run_params).encode()).hexdigest()[:6]
+
+    # Determine the output directory
+    test_dir = Path('networks') / f'{args.dataset}-{args.system}_b{args.batch_size}_n{args.num_epochs}_{params_hash}'
+    test_dir.mkdir(parents=True, exist_ok=True)
+    with open(test_dir / 'config.json', 'w') as fp:
+        json.dump(run_params, fp)
+
+    # Configuration he
+    strategy = device_strategy(args.system);
 
     # Making the data loaders
     data_dir = Path('data') / args.dataset
