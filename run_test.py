@@ -19,8 +19,12 @@ import tensorflow as tf
 from scipy.stats import spearmanr, kendalltau
 import pandas as pd
 import numpy as np
-import nfp
+import pdb
 
+# Import locally installed nfp
+import sys
+sys.path.append('/nethome/damank/work/FE/ANL_GNN/gnn_anl_gc_collab/nfp')
+import nfp
 from moldesign.nfp import make_data_loader
 
 
@@ -90,6 +94,7 @@ def parse_args():
     arg_parser.add_argument('--dataset', choices=['qm9', 'redox'], help='Which dataset to use for training', default='qm9')
     arg_parser.add_argument('--system', choices=['gpu', 'ipu'], help='Which system to use for training', default='gpu')
     arg_parser.add_argument('--lr-start', default=1e-3, help='Learning rate at start of training', type=float)
+    arg_parser.add_argument('--validation', default=False, help='Run validation along with training', type=bool)
 
     # Parse the arguments
     args = arg_parser.parse_args()
@@ -128,6 +133,12 @@ def device_strategy(device='gpu'):
 
     return strategy
 
+def benchmark_dataset(dataset, num_epochs=1, num_steps=1):
+    print("BENCHMARKING DATASET")
+    out = ipu.dataset_benchmark.dataset_benchmark(dataset.prefetch(num_steps), num_epochs, num_steps)
+    print(out)
+
+
 if __name__ == "__main__":
 
     args = parse_args()
@@ -141,7 +152,7 @@ if __name__ == "__main__":
     with open(test_dir / 'config.json', 'w') as fp:
         json.dump(run_params, fp)
 
-    # Configuration he
+    # Configuration
     strategy = device_strategy(args.system);
 
     # Making the data loaders
@@ -150,14 +161,22 @@ if __name__ == "__main__":
     train_loader = make_data_loader(train_data['smiles'], train_data['output'], shuffle_buffer=32768, repeat=True,
                                     batch_size=args.batch_size, max_size=args.padded_size, drop_last_batch=True)
     steps_per_epoch = len(train_data) // args.batch_size
+    train_loader = train_loader.prefetch(steps_per_epoch)
 
     test_data = pd.read_csv(data_dir / 'test.csv')
     test_loader = make_data_loader(test_data['smiles'], test_data['output'], batch_size=args.batch_size,
                                    max_size=args.padded_size, drop_last_batch=True)
 
-    valid_data = pd.read_csv(data_dir / 'valid.csv')
-    valid_loader = make_data_loader(valid_data['smiles'], valid_data['output'], batch_size=args.batch_size,
+    # Get validation data
+    if args.validation:
+        valid_data = pd.read_csv(data_dir / 'valid.csv')
+        valid_loader = make_data_loader(valid_data['smiles'], valid_data['output'], batch_size=args.batch_size,
                                     max_size=args.padded_size, drop_last_batch=True)
+        validation_steps = len(valid_data)//args.batch_size
+        valid_loader = train_loader.prefetch(validation_steps)
+    else:
+        valid_loader = None
+        validation_steps = None
 
     # Determine the amount of scaling to provide
     y_train = train_data['output']
@@ -165,6 +184,11 @@ if __name__ == "__main__":
 
     y_scale_mean = y_scale.mean()
     y_scale_std = y_scale.std()
+
+    steps_per_exec = 1
+    if args.system == 'ipu':
+        benchmark_dataset(train_loader, num_epochs=10, num_steps=steps_per_epoch)
+        steps_per_exec = steps_per_epoch
 
     with strategy.scope():
         # Make the model
@@ -179,16 +203,15 @@ if __name__ == "__main__":
         final_learn_rate = init_learn_rate * 1e-3
         decay_rate = (final_learn_rate / init_learn_rate) ** (1. / (args.num_epochs - 1))
 
-
         def lr_schedule(epoch, lr):
             return lr * decay_rate
 
-
         # Compile the model then train
-        model.compile(Adam(init_learn_rate), 'mean_squared_error', metrics=['mean_absolute_error'])
+        model.compile(Adam(init_learn_rate), 'mean_squared_error', metrics=['mean_absolute_error'], steps_per_execution=steps_per_exec)
         start_time = perf_counter()
+
         history = model.fit(
-            train_loader, validation_data=valid_loader, epochs=args.num_epochs, verbose=True,
+            train_loader, epochs=args.num_epochs, verbose=True,
             shuffle=False,
             callbacks=[
                 cb.LearningRateScheduler(lr_schedule),
@@ -198,22 +221,25 @@ if __name__ == "__main__":
                 cb.CSVLogger(test_dir / 'train_log.csv'),
                 cb.TerminateOnNaN()
             ],
-            steps_per_epoch=steps_per_epoch
+            steps_per_epoch=steps_per_epoch,
+            validation_data=valid_loader, 
+            validation_steps=validation_steps
         )
+
         run_time = perf_counter() - start_time
 
-        # Run on the validation set and assess statistics
-        y_true = np.hstack([np.squeeze(x[1].numpy()) for x in iter(test_loader)])
-        y_pred = np.squeeze(model.predict(test_loader))
+        # # Run on the validation set and assess statistics
+        # y_true = np.hstack([np.squeeze(x[1].numpy()) for x in iter(test_loader)])
+        # y_pred = np.squeeze(model.predict(test_loader))
 
-        pd.DataFrame({'true': y_true, 'pred': y_pred}).to_csv(test_dir / 'test_results.csv', index=False)
+        # pd.DataFrame({'true': y_true, 'pred': y_pred}).to_csv(test_dir / 'test_results.csv', index=False)
 
-        with open(test_dir / 'test_summary.json', 'w') as fp:
-            json.dump({
-                'runtime': run_time,
-                'r2_score': float(np.corrcoef(y_true, y_pred)[1, 0] ** 2),  # float() converts from np.float32
-                'spearmanr': float(spearmanr(y_true, y_pred)[0]),
-                'kendall_tau': float(kendalltau(y_true, y_pred)[0]),
-                'mae': float(np.mean(np.abs(y_pred - y_true))),
-                'rmse': float(np.sqrt(np.mean(np.square(y_pred - y_true))))
-            }, fp, indent=2)
+        # with open(test_dir / 'test_summary.json', 'w') as fp:
+        #     json.dump({
+        #         'runtime': run_time,
+        #         'r2_score': float(np.corrcoef(y_true, y_pred)[1, 0] ** 2),  # float() converts from np.float32
+        #         'spearmanr': float(spearmanr(y_true, y_pred)[0]),
+        #         'kendall_tau': float(kendalltau(y_true, y_pred)[0]),
+        #         'mae': float(np.mean(np.abs(y_pred - y_true))),
+        #         'rmse': float(np.sqrt(np.mean(np.square(y_pred - y_true))))
+        #     }, fp, indent=2)

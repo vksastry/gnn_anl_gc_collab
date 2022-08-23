@@ -7,5 +7,6 @@
     "num_epochs": 5,
     "padded_size": 75,
     "dataset": "redox",
-    "system": "ipu"
+    "system": "ipu",
+    "validation": false
 }
