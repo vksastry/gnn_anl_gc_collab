@@ -95,6 +95,7 @@ def parse_args():
     arg_parser.add_argument('--system', choices=['gpu', 'ipu'], help='Which system to use for training', default='gpu')
     arg_parser.add_argument('--lr-start', default=1e-3, help='Learning rate at start of training', type=float)
     arg_parser.add_argument('--validation', default=False, help='Run validation along with training', type=bool)
+    arg_parser.add_argument('--steps-per-exec', default=-1, help='Steps on IPU before control is returned to CPU', type=int)
 
     # Parse the arguments
     args = arg_parser.parse_args()
@@ -188,7 +189,8 @@ if __name__ == "__main__":
     steps_per_exec = 1
     if args.system == 'ipu':
         benchmark_dataset(train_loader, num_epochs=10, num_steps=steps_per_epoch)
-        steps_per_exec = steps_per_epoch
+        if args.steps_per_exec < 0:
+            steps_per_exec = steps_per_epoch
 
     with strategy.scope():
         # Make the model
@@ -197,6 +199,10 @@ if __name__ == "__main__":
 
         # Set the scale for the output parameter
         model.get_layer('scale').set_weights([np.array([[y_scale_mean]]), np.array([y_scale_std])])
+
+        # Asynchronous callback option on
+        if args.system == 'ipu' and steps_per_exec>1:
+            model.set_asynchronous_callbacks(asynchronous=True)
 
         # Configure the LR schedule
         init_learn_rate = args.lr_start

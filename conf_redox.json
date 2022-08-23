@@ -8,5 +8,6 @@
     "padded_size": 75,
     "dataset": "redox",
     "system": "ipu",
-    "validation": false
+    "validation": false,
+    "steps_per_exec": -1
 }
