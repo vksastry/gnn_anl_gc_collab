@@ -79,8 +79,6 @@ def batched_segment_op(
 
     """
 
-    if data_mask is None:
-        data_mask = tf.ones(tf.shape(data)[:-1], dtype=tf.bool)
 
     # Prior to flattening, offset rows of segment_ids to preserve batches
     batch_size = tf.shape(data, out_type=segment_ids.dtype)[0]
@@ -88,8 +86,14 @@ def batched_segment_op(
     ids_offset = segment_ids + tf.expand_dims(offsets, 1)
 
     # Mask and flatten the data and segment_ids
-    flat_data = tf.boolean_mask(data, data_mask)
-    flat_ids = tf.boolean_mask(ids_offset, data_mask)
+    if data_mask is None:
+        dShape = data.shape
+        seg_id_shape = segment_ids.shape
+        flat_data = tf.reshape(data,[-1,data.shape[-1]])
+        flat_ids  = tf.reshape(ids_offset,[-1,])
+    else:
+        flat_data = tf.boolean_mask(data, data_mask)
+        flat_ids = tf.boolean_mask(ids_offset, data_mask)
 
     reduction = getattr(tf.math, f"unsorted_segment_{reduction}")
 

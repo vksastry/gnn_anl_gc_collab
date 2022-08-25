@@ -1,5 +1,6 @@
 """Train the model on a pre-defined training set and options provided by a user"""
 from argparse import ArgumentParser
+from gc import callbacks
 from pathlib import Path
 from typing import List
 from time import perf_counter
@@ -167,6 +168,7 @@ if __name__ == "__main__":
     test_data = pd.read_csv(data_dir / 'test.csv')
     test_loader = make_data_loader(test_data['smiles'], test_data['output'], batch_size=args.batch_size,
                                    max_size=args.padded_size, drop_last_batch=True)
+    steps_test = len(test_data) // args.batch_size
 
     # Get validation data
     if args.validation:
@@ -216,17 +218,17 @@ if __name__ == "__main__":
         model.compile(Adam(init_learn_rate), 'mean_squared_error', metrics=['mean_absolute_error'], steps_per_execution=steps_per_exec)
         start_time = perf_counter()
 
+        callbacks=[ cb.LearningRateScheduler(lr_schedule),
+                    cb.ModelCheckpoint(test_dir / 'best_model.h5', save_best_only=True),
+                    # We restart the best weights, but do not halt early to simplify timing across
+                    cb.EarlyStopping(patience=args.num_epochs, restore_best_weights=True),
+                    cb.CSVLogger(test_dir / 'train_log.csv'),
+                    cb.TerminateOnNaN() ]
+    
         history = model.fit(
             train_loader, epochs=args.num_epochs, verbose=True,
             shuffle=False,
-            callbacks=[
-                cb.LearningRateScheduler(lr_schedule),
-                cb.ModelCheckpoint(test_dir / 'best_model.h5', save_best_only=True),
-                # We restart the best weights, but do not halt early to simplify timing across
-                cb.EarlyStopping(patience=args.num_epochs, restore_best_weights=True),
-                cb.CSVLogger(test_dir / 'train_log.csv'),
-                cb.TerminateOnNaN()
-            ],
+            callbacks=callbacks,
             steps_per_epoch=steps_per_epoch,
             validation_data=valid_loader, 
             validation_steps=validation_steps
@@ -234,18 +236,19 @@ if __name__ == "__main__":
 
         run_time = perf_counter() - start_time
 
-        # # Run on the validation set and assess statistics
-        # y_true = np.hstack([np.squeeze(x[1].numpy()) for x in iter(test_loader)])
-        # y_pred = np.squeeze(model.predict(test_loader))
+        # Run on the validation set and assess statistics
+        y_pred = np.squeeze(model.predict(test_loader, steps=steps_test))
 
-        # pd.DataFrame({'true': y_true, 'pred': y_pred}).to_csv(test_dir / 'test_results.csv', index=False)
+    y_true = np.hstack([np.squeeze(x[1].numpy()) for x in iter(test_loader)])
 
-        # with open(test_dir / 'test_summary.json', 'w') as fp:
-        #     json.dump({
-        #         'runtime': run_time,
-        #         'r2_score': float(np.corrcoef(y_true, y_pred)[1, 0] ** 2),  # float() converts from np.float32
-        #         'spearmanr': float(spearmanr(y_true, y_pred)[0]),
-        #         'kendall_tau': float(kendalltau(y_true, y_pred)[0]),
-        #         'mae': float(np.mean(np.abs(y_pred - y_true))),
-        #         'rmse': float(np.sqrt(np.mean(np.square(y_pred - y_true))))
-        #     }, fp, indent=2)
+    pd.DataFrame({'true': y_true, 'pred': y_pred}).to_csv(test_dir / 'test_results.csv', index=False)
+
+    with open(test_dir / 'test_summary.json', 'w') as fp:
+        json.dump({
+            'runtime': run_time,
+            'r2_score': float(np.corrcoef(y_true, y_pred)[1, 0] ** 2),  # float() converts from np.float32
+            'spearmanr': float(spearmanr(y_true, y_pred)[0]),
+            'kendall_tau': float(kendalltau(y_true, y_pred)[0]),
+            'mae': float(np.mean(np.abs(y_pred - y_true))),
+            'rmse': float(np.sqrt(np.mean(np.square(y_pred - y_true))))
+        }, fp, indent=2)
