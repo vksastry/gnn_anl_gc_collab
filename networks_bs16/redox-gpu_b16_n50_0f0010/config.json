@@ -1,0 +1,1 @@
+{"atom_features": 64, "num_messages": 8, "output_layers": [128, 64], "batch_size": 16, "num_epochs": 50, "padded_size": 75, "dataset": "redox", "system": "gpu", "lr_start": 0.001}
