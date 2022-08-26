@@ -9,5 +9,8 @@
     "dataset": "redox",
     "system": "ipu",
     "validation": false,
-    "steps_per_exec": -1
+    "steps_per_exec": -1,
+    "num_devices": 1,
+    "num_grad_accum":1,
+    "dtype": "float"
 }

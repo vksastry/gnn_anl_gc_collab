@@ -97,6 +97,9 @@ def parse_args():
     arg_parser.add_argument('--lr-start', default=1e-3, help='Learning rate at start of training', type=float)
     arg_parser.add_argument('--validation', default=False, help='Run validation along with training', type=bool)
     arg_parser.add_argument('--steps-per-exec', default=-1, help='Steps on IPU before control is returned to CPU', type=int)
+    arg_parser.add_argument('--num-devices', default=1, help='Number of devices used for training', type=int)
+    arg_parser.add_argument('--num-grad-accum', default=1, help='Number of gradient accumulation steps for IPUs', type=int)
+    arg_parser.add_argument('--dtype', choices=['half', 'float'], default="float", help='Model precision: "half" (fp16) or "float" (fp32) ', type=str)
 
     # Parse the arguments
     args = arg_parser.parse_args()
