@@ -114,11 +114,11 @@ def parse_args():
 
     return args
 
-def device_strategy(device='gpu'):
+def device_strategy(device:str='gpu', num_devices:int=1):
     if device == 'ipu':
         #  Configure the IPU system and define the strategy
         cfg = ipu.config.IPUConfig()
-        cfg.auto_select_ipus = 1
+        cfg.auto_select_ipus = num_devices
         cfg.configure_ipu_system()
 
         strategy = ipu.ipu_strategy.IPUStrategy(enable_dataset_iterators=True)
@@ -158,7 +158,7 @@ if __name__ == "__main__":
         json.dump(run_params, fp)
 
     # Configuration
-    strategy = device_strategy(args.system);
+    strategy = device_strategy(device=args.system, num_devices=args.num_devices)
 
     # Making the data loaders
     data_dir = Path('data') / args.dataset
@@ -166,12 +166,16 @@ if __name__ == "__main__":
     train_loader = make_data_loader(train_data['smiles'], train_data['output'], shuffle_buffer=32768, repeat=True,
                                     batch_size=args.batch_size, max_size=args.padded_size, drop_last_batch=True)
     steps_per_epoch = len(train_data) // args.batch_size
+    #Adjust steps per epoch for number of devices
+    steps_per_epoch = args.num_devices*(steps_per_epoch//args.num_devices)
+    
     train_loader = train_loader.prefetch(steps_per_epoch)
 
     test_data = pd.read_csv(data_dir / 'test.csv')
     test_loader = make_data_loader(test_data['smiles'], test_data['output'], batch_size=args.batch_size,
                                    max_size=args.padded_size, drop_last_batch=True)
     steps_test = len(test_data) // args.batch_size
+    steps_test = args.num_devices*(steps_test//args.num_devices)
 
     # Get validation data
     if args.validation:
@@ -195,7 +199,7 @@ if __name__ == "__main__":
     if args.system == 'ipu':
         benchmark_dataset(train_loader, num_epochs=10, num_steps=steps_per_epoch)
         if args.steps_per_exec < 0:
-            steps_per_exec = steps_per_epoch
+            steps_per_exec = steps_per_epoch//args.num_devices
 
     with strategy.scope():
         # Make the model
