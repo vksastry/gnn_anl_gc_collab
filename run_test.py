@@ -183,7 +183,7 @@ if __name__ == "__main__":
         valid_loader = make_data_loader(valid_data['smiles'], valid_data['output'], batch_size=args.batch_size,
                                     max_size=args.padded_size, drop_last_batch=True)
         validation_steps = len(valid_data)//args.batch_size
-        valid_loader = train_loader.prefetch(validation_steps)
+        valid_loader = valid_loader.prefetch(validation_steps)
     else:
         valid_loader = None
         validation_steps = None
