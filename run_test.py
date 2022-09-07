@@ -95,7 +95,7 @@ def parse_args():
     arg_parser.add_argument('--dataset', choices=['qm9', 'redox'], help='Which dataset to use for training', default='qm9')
     arg_parser.add_argument('--system', choices=['gpu', 'ipu'], help='Which system to use for training', default='gpu')
     arg_parser.add_argument('--lr-start', default=1e-3, help='Learning rate at start of training', type=float)
-    arg_parser.add_argument('--validation', default=False, help='Run validation along with training', type=bool)
+    arg_parser.add_argument('--validation', default=1, help='Validation frequency along with training. If value <=0, then validation is ignored', type=int)
     arg_parser.add_argument('--steps-per-exec', default=-1, help='Steps on IPU before control is returned to CPU', type=int)
     arg_parser.add_argument('--num-devices', default=1, help='Number of devices used for training', type=int)
     arg_parser.add_argument('--num-grad-accum', default=1, help='Number of gradient accumulation steps for IPUs', type=int)
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     steps_test = args.num_devices*(steps_test//args.num_devices)
 
     # Get validation data
-    if args.validation:
+    if args.validation>0:
         valid_data = pd.read_csv(data_dir / 'valid.csv')
         valid_loader = make_data_loader(valid_data['smiles'], valid_data['output'], batch_size=args.batch_size,
                                     max_size=args.padded_size, drop_last_batch=True)
@@ -238,7 +238,8 @@ if __name__ == "__main__":
             callbacks=callbacks,
             steps_per_epoch=steps_per_epoch,
             validation_data=valid_loader, 
-            validation_steps=validation_steps
+            validation_steps=validation_steps,
+            validation_freq = args.validation
         )
 
         run_time = perf_counter() - start_time
