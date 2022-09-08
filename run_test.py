@@ -152,7 +152,7 @@ if __name__ == "__main__":
     params_hash = hashlib.sha256(json.dumps(run_params).encode()).hexdigest()[:6]
 
     # Determine the output directory
-    test_dir = Path('networks') / f'{args.dataset}-{args.system}_b{args.batch_size}_n{args.num_epochs}_{params_hash}'
+    test_dir = Path('networks') / f'{args.dataset}-{args.system}_b{args.batch_size}_n{args.num_epochs}_d{args.num_devices}_{params_hash}'
     test_dir.mkdir(parents=True, exist_ok=True)
     with open(test_dir / 'config.json', 'w') as fp:
         json.dump(run_params, fp)
@@ -226,7 +226,8 @@ if __name__ == "__main__":
         start_time = perf_counter()
 
         callbacks=[ cb.LearningRateScheduler(lr_schedule),
-                    cb.ModelCheckpoint(test_dir / 'best_model.h5', save_best_only=True),
+                    # cb.ModelCheckpoint(test_dir / 'best_model.h5', save_best_only=True),
+                    cb.ModelCheckpoint(test_dir / '{epoch:03d}.h5', save_best_only=False),
                     # We restart the best weights, but do not halt early to simplify timing across
                     cb.EarlyStopping(patience=args.num_epochs, restore_best_weights=True),
                     cb.CSVLogger(test_dir / 'train_log.csv'),
