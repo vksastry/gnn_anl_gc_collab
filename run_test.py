@@ -244,6 +244,7 @@ if __name__ == "__main__":
         )
 
         run_time = perf_counter() - start_time
+        print("Runtime: ", run_time)
 
         # Run on the validation set and assess statistics
         y_pred = np.squeeze(model.predict(test_loader, steps=steps_test))

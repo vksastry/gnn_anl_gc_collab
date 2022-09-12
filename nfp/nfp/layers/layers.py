@@ -172,14 +172,17 @@ class ConcatDense(tf_layers.Layer):
         self.supports_masking = True
 
     def build(self, input_shape):
-        num_features = input_shape[0][-1]
-        self.concat = tf_layers.Concatenate()
-        self.dense1 = tf_layers.Dense(2 * num_features, activation="relu")
-        self.dense2 = tf_layers.Dense(num_features)
+        self.num_inputs = len(input_shape)
+        self.num_features = input_shape[0][-1]
+        self.dense1 = [ tf_layers.Dense(2*self.num_features, name =f'Concat_Dense1_{i}') for i in range(self.num_inputs) ]
+        self.add    = tf_layers.Add(name="Concat_Add")
+        self.activation = tf_layers.Activation('relu')
+        self.dense2 = tf_layers.Dense(self.num_features)
 
     def call(self, inputs, mask=None, **kwargs):
-        output = self.concat(inputs)
-        output = self.dense1(output)
+        output = [ self.dense1[i](inputs[i]) for i in range(self.num_inputs) ]
+        output = self.add(output)
+        output = self.activation(output)
         output = self.dense2(output)
         return output
 

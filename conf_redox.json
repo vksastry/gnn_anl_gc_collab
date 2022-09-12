@@ -8,7 +8,7 @@
     "padded_size": 75,
     "dataset": "redox",
     "system": "ipu",
-    "validation": 1,
+    "validation": 10,
     "steps_per_exec": -1,
     "num_devices": 4,
     "num_grad_accum":1,
