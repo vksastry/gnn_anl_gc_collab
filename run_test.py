@@ -2,7 +2,7 @@
 from argparse import ArgumentParser
 from gc import callbacks
 from pathlib import Path
-from typing import List
+from typing import List, Union
 from time import perf_counter
 import hashlib
 import json
@@ -98,6 +98,7 @@ def parse_args():
     arg_parser.add_argument('--validation', default=1, help='Validation frequency along with training. If value <=0, then validation is ignored', type=int)
     arg_parser.add_argument('--steps-per-exec', default=-1, help='Steps on IPU before control is returned to CPU', type=int)
     arg_parser.add_argument('--num-devices', default=1, help='Number of devices used for training', type=int)
+    arg_parser.add_argument('--device-ids', default=None, help='Index of specific devices to launch job on. By default, Ids are chosen automatically', type=int, nargs='+')
     arg_parser.add_argument('--num-grad-accum', default=1, help='Number of gradient accumulation steps for IPUs', type=int)
     arg_parser.add_argument('--dtype', choices=['half', 'float'], default="float", help='Model precision: "half" (fp16) or "float" (fp32) ', type=str)
 
@@ -112,13 +113,21 @@ def parse_args():
         # Reload command line arguments
         args = arg_parser.parse_args()
 
+    if args.device_ids is not None:
+        args.num_devices = len(args.device_ids)
+        print(f'Number of devices to be used: {args.num_devices} with IDS {args.device_ids}')
+    
     return args
 
-def device_strategy(device:str='gpu', num_devices:int=1):
+def device_strategy(device:str='gpu', num_devices:Union[int, list, tuple] =1):
     if device == 'ipu':
         #  Configure the IPU system and define the strategy
         cfg = ipu.config.IPUConfig()
-        cfg.auto_select_ipus = num_devices
+        if type(num_devices)==int:
+            print("Automatically selecting the available IPUs")
+            cfg.auto_select_ipus = num_devices
+        else:
+            cfg.select_ipus = list(num_devices)
         cfg.configure_ipu_system()
 
         strategy = ipu.ipu_strategy.IPUStrategy(enable_dataset_iterators=True)
