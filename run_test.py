@@ -13,6 +13,7 @@ except ImportError:
     print('Cannot find the `ipu` library for Tensorflow')
     ipu = None
 
+from moldesign.nfp import make_data_loader
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import callbacks as cb
 from tensorflow.keras import layers
@@ -21,12 +22,7 @@ from scipy.stats import spearmanr, kendalltau
 import pandas as pd
 import numpy as np
 import pdb
-
-# Import locally installed nfp
-import sys
-sys.path.append('/nethome/damank/work/FE/ANL_GNN/gnn_anl_gc_collab/nfp')
 import nfp
-from moldesign.nfp import make_data_loader
 
 
 def build_fn(atom_features: int = 64,
@@ -243,13 +239,15 @@ if __name__ == "__main__":
                     cb.TerminateOnNaN() ]
     
         history = model.fit(
-            train_loader, epochs=args.num_epochs, verbose=True,
+            train_loader,
+            epochs=args.num_epochs,
+            verbose=True,
             shuffle=False,
             callbacks=callbacks,
             steps_per_epoch=steps_per_epoch,
             validation_data=valid_loader, 
             validation_steps=validation_steps,
-            validation_freq = args.validation
+            validation_freq=args.validation
         )
 
         run_time = perf_counter() - start_time
