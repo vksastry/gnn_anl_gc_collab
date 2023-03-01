@@ -13,6 +13,7 @@ except ImportError:
     print('Cannot find the `ipu` library for Tensorflow')
     ipu = None
 
+from moldesign.nfp import make_data_loader
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import callbacks as cb
 from tensorflow.keras import layers
@@ -21,12 +22,29 @@ from scipy.stats import spearmanr, kendalltau
 import pandas as pd
 import numpy as np
 import pdb
-
-# Import locally installed nfp
-import sys
-sys.path.append('/nethome/damank/work/FE/ANL_GNN/gnn_anl_gc_collab/nfp')
 import nfp
-from moldesign.nfp import make_data_loader
+
+
+class ReduceAtoms(tf.keras.layers.Layer):
+    """Reduce the atoms along a certain direction
+
+    Args:
+        reduction_op: Name of the operation used for reduction
+    """
+
+    def __init__(self, reduction_op: str = 'mean', **kwargs):
+        super().__init__(**kwargs)
+        self.reduction_op = reduction_op
+
+    def get_config(self):
+        config = super().get_config()
+        config['reduction_op'] = self.reduction_op
+        return config
+
+    def call(self, inputs, mask=None):
+        masked_tensor = tf.ragged.boolean_mask(inputs, mask)
+        reduce_fn = getattr(tf.math, f'reduce_{self.reduction_op}')
+        return reduce_fn(masked_tensor, axis=1)
 
 
 def build_fn(atom_features: int = 64,
@@ -76,10 +94,11 @@ def build_fn(atom_features: int = 64,
         output = layers.Dense(shape, activation='relu')(output)
     output = layers.Dense(1)(output)
     output = layers.Dense(1, activation='linear', name='scale')(output)
-    output = layers.Lambda(tf.math.reduce_sum, arguments={'axis': 1})(output)
+    output = ReduceAtoms()(output)
 
     # Construct the tf.keras model
     return tf.keras.Model([atom, bond, connectivity], [output])
+
 
 def parse_args():
     # Define the command line arguments
@@ -98,7 +117,8 @@ def parse_args():
     arg_parser.add_argument('--validation', default=1, help='Validation frequency along with training. If value <=0, then validation is ignored', type=int)
     arg_parser.add_argument('--steps-per-exec', default=-1, help='Steps on IPU before control is returned to CPU', type=int)
     arg_parser.add_argument('--num-devices', default=1, help='Number of devices used for training', type=int)
-    arg_parser.add_argument('--device-ids', default=None, help='Index of specific devices to launch job on. By default, Ids are chosen automatically', type=int, nargs='+')
+    arg_parser.add_argument('--device-ids', default=None, help='Index of specific devices to launch job on. By default, Ids are chosen automatically', type=int,
+                            nargs='+')
     arg_parser.add_argument('--num-grad-accum', default=1, help='Number of gradient accumulation steps for IPUs', type=int)
     arg_parser.add_argument('--dtype', choices=['half', 'float'], default="float", help='Model precision: "half" (fp16) or "float" (fp32) ', type=str)
 
@@ -107,7 +127,7 @@ def parse_args():
 
     if args.conf is not None:
         for conf_fname in args.conf:
-            with open(conf_fname,'r') as f:
+            with open(conf_fname, 'r') as f:
                 dict = json.loads(f.read())
                 arg_parser.set_defaults(**dict)
         # Reload command line arguments
@@ -116,14 +136,15 @@ def parse_args():
     if args.device_ids is not None:
         args.num_devices = len(args.device_ids)
         print(f'Number of devices to be used: {args.num_devices} with IDS {args.device_ids}')
-    
+
     return args
 
-def device_strategy(device:str='gpu', num_devices:Union[int, list, tuple] =1):
+
+def device_strategy(device: str = 'gpu', num_devices: Union[int, list, tuple] = 1):
     if device == 'ipu':
         #  Configure the IPU system and define the strategy
         cfg = ipu.config.IPUConfig()
-        if type(num_devices)==int:
+        if type(num_devices) == int:
             print("Automatically selecting the available IPUs")
             cfg.auto_select_ipus = num_devices
         else:
@@ -146,6 +167,7 @@ def device_strategy(device:str='gpu', num_devices:Union[int, list, tuple] =1):
         raise ValueError(f'System {args.system} not supported yet')
 
     return strategy
+
 
 def benchmark_dataset(dataset, num_epochs=1, num_steps=1):
     print("BENCHMARKING DATASET")
@@ -175,23 +197,23 @@ if __name__ == "__main__":
     train_loader = make_data_loader(train_data['smiles'], train_data['output'], shuffle_buffer=32768, repeat=True,
                                     batch_size=args.batch_size, max_size=args.padded_size, drop_last_batch=True)
     steps_per_epoch = len(train_data) // args.batch_size
-    #Adjust steps per epoch for number of devices
-    steps_per_epoch = args.num_devices*(steps_per_epoch//args.num_devices)
-    
+    # Adjust steps per epoch for number of devices
+    steps_per_epoch = args.num_devices * (steps_per_epoch // args.num_devices)
+
     train_loader = train_loader.prefetch(steps_per_epoch)
 
     test_data = pd.read_csv(data_dir / 'test.csv')
     test_loader = make_data_loader(test_data['smiles'], test_data['output'], batch_size=args.batch_size,
                                    max_size=args.padded_size, drop_last_batch=True)
     steps_test = len(test_data) // args.batch_size
-    steps_test = args.num_devices*(steps_test//args.num_devices)
+    steps_test = args.num_devices * (steps_test // args.num_devices)
 
     # Get validation data
-    if args.validation>0:
+    if args.validation > 0:
         valid_data = pd.read_csv(data_dir / 'valid.csv')
         valid_loader = make_data_loader(valid_data['smiles'], valid_data['output'], batch_size=args.batch_size,
-                                    max_size=args.padded_size, drop_last_batch=True)
-        validation_steps = len(valid_data)//args.batch_size
+                                        max_size=args.padded_size, drop_last_batch=True)
+        validation_steps = len(valid_data) // args.batch_size
         valid_loader = valid_loader.prefetch(validation_steps)
     else:
         valid_loader = None
@@ -208,7 +230,7 @@ if __name__ == "__main__":
     if args.system == 'ipu':
         benchmark_dataset(train_loader, num_epochs=10, num_steps=steps_per_epoch)
         if args.steps_per_exec < 0:
-            steps_per_exec = steps_per_epoch//args.num_devices
+            steps_per_exec = steps_per_epoch // args.num_devices
 
     with strategy.scope():
         # Make the model
@@ -219,7 +241,7 @@ if __name__ == "__main__":
         model.get_layer('scale').set_weights([np.array([[y_scale_mean]]), np.array([y_scale_std])])
 
         # Asynchronous callback option on
-        if args.system == 'ipu' and steps_per_exec>1:
+        if args.system == 'ipu' and steps_per_exec > 1:
             model.set_asynchronous_callbacks(asynchronous=True)
 
         # Configure the LR schedule
@@ -227,29 +249,32 @@ if __name__ == "__main__":
         final_learn_rate = init_learn_rate * 1e-3
         decay_rate = (final_learn_rate / init_learn_rate) ** (1. / (args.num_epochs - 1))
 
+
         def lr_schedule(epoch, lr):
             return lr * decay_rate
+
 
         # Compile the model then train
         model.compile(Adam(init_learn_rate), 'mean_squared_error', metrics=['mean_absolute_error'], steps_per_execution=steps_per_exec)
         start_time = perf_counter()
 
-        callbacks=[ cb.LearningRateScheduler(lr_schedule),
-                    # cb.ModelCheckpoint(test_dir / 'best_model.h5', save_best_only=True),
-                    cb.ModelCheckpoint(test_dir / '{epoch:03d}.h5', save_best_only=False),
-                    # We restart the best weights, but do not halt early to simplify timing across
-                    cb.EarlyStopping(patience=args.num_epochs, restore_best_weights=True),
-                    cb.CSVLogger(test_dir / 'train_log.csv'),
-                    cb.TerminateOnNaN() ]
-    
+        callbacks = [cb.LearningRateScheduler(lr_schedule),
+                     cb.ModelCheckpoint(test_dir / 'best_model.h5', save_best_only=True),
+                     # We restart the best weights, but do not halt early to simplify timing across
+                     cb.EarlyStopping(patience=args.num_epochs, restore_best_weights=True),
+                     cb.CSVLogger(test_dir / 'train_log.csv'),
+                     cb.TerminateOnNaN()]
+
         history = model.fit(
-            train_loader, epochs=args.num_epochs, verbose=True,
+            train_loader,
+            epochs=args.num_epochs,
+            verbose=True,
             shuffle=False,
             callbacks=callbacks,
             steps_per_epoch=steps_per_epoch,
-            validation_data=valid_loader, 
+            validation_data=valid_loader,
             validation_steps=validation_steps,
-            validation_freq = args.validation
+            validation_freq=args.validation
         )
 
         run_time = perf_counter() - start_time

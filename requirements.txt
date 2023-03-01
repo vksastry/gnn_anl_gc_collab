@@ -1,6 +1,6 @@
 matplotlib==3.3.3
 tensorflow==2.8.*
-nfp==0.3.12
+git+https://github.com/exalearn/nfp.git@gc_updates
 scikit-learn==1.1.1
 rdkit-pypi==2020.9.5.2
 networkx==2.8.5
