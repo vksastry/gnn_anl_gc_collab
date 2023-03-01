@@ -231,8 +231,7 @@ if __name__ == "__main__":
         start_time = perf_counter()
 
         callbacks=[ cb.LearningRateScheduler(lr_schedule),
-                    # cb.ModelCheckpoint(test_dir / 'best_model.h5', save_best_only=True),
-                    cb.ModelCheckpoint(test_dir / '{epoch:03d}.h5', save_best_only=False),
+                    cb.ModelCheckpoint(test_dir / 'best_model.h5', save_best_only=True),
                     # We restart the best weights, but do not halt early to simplify timing across
                     cb.EarlyStopping(patience=args.num_epochs, restore_best_weights=True),
                     cb.CSVLogger(test_dir / 'train_log.csv'),
